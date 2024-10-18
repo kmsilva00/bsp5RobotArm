@@ -300,6 +300,9 @@ class SerialHandle:
         except Exception as e:
             print(f"Error encoding message: {e}")
             return None
+        
+        
+        
 
     def send_servo_positions(self, encoded_message):
         """
@@ -332,6 +335,12 @@ class SerialHandle:
         else:
             print(f"Invalid angle {angle} for motor {motor}. Must be between 0 and 180.")
             return False
+        
+    def default_positions(self):
+        self.update_motor_angles('m0', 90)
+        self.update_motor_angles('m1', 45)
+        self.update_motor_angles('m2', 110)
+        self.update_motor_angles('m3', 80)
 
     def encode_motor_angles(self):
         """
@@ -444,9 +453,11 @@ transformed_vector = me.apply_homogeneous_transform(m_combined, vector)
 
 serial_handle = SerialHandle()
 serial_handle.initialize_serial()
+serial_handle.default_positions()
+time.sleep(5)
 
 # Update motor angles
-serial_handle.update_motor_angles('m0', 90)
+serial_handle.update_motor_angles('m0', 00)
 serial_handle.update_motor_angles('m1', 45)
 serial_handle.update_motor_angles('m2', 110)
 serial_handle.update_motor_angles('m3', 80)
