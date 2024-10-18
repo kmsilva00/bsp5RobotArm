@@ -131,8 +131,7 @@ class HandProcessor:
 
 
 class XYZTransformations:
-    def initialize(self):
-        print("Initializing Kinetics Handle...")
+
 
     def rotation_matrix_x(self,angle_degrees):
         angle_radians = np.deg2rad(angle_degrees)
@@ -232,8 +231,7 @@ class XYZTransformations:
     #                    [0.000000e+00, 0.000000e+00, 6.123234e-17]])
 
     # cleaned_matrix = clean_matrix(matrix)
-
-
+ 
     """ tests
 
         
@@ -255,28 +253,13 @@ class XYZTransformations:
     transformed_vector = apply_homogeneous_transform(m_combined, vector)
     # print("Combined Test - Expected: [5, 1, 0], Got:", transformed_vector)
     """
-       
-#SERIAL COMMUNICATION
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 class SerialHandle:
-    def __init__(self, port='COM7', baud_rate=9600, timeout=1):
+    def __init__(self, port='COM5', baud_rate=9600, timeout=1):
         """
         Initialize the serial connection.
         
-        :param port: Serial port name (e.g., 'COM7' or '/dev/ttyUSB0')
+        :param port: Serial port name (e.g., 'COM5' or '/dev/ttyUSB0')
         :param baud_rate: Communication speed
         :param timeout: Timeout for serial communication in seconds
         """
@@ -284,6 +267,14 @@ class SerialHandle:
         self.port = port
         self.baud_rate = baud_rate
         self.timeout = timeout
+
+        # Create a dictionary to store motor angles
+        self.motor_angles = {
+            'm0': 0,
+            'm1': 0,
+            'm2': 0,
+            'm3': 0
+        }
 
     def initialize_serial(self):
         """
@@ -324,6 +315,46 @@ class SerialHandle:
                 print(f"Error sending message: {e}")
         else:
             print("Serial port is not open. Please initialize the serial connection first.")
+
+    def update_motor_angles(self, motor, angle):
+        """
+        Update the angle for a specific motor in the motor_angles dictionary.
+        
+        :param motor: The motor identifier ('m0', 'm1', 'm2', 'm3')
+        :param angle: The angle value to set for the specified motor (should be between 0 and 180)
+        
+        :return: bool: True if the update was successful, False if the angle is out of range
+        """
+        if motor in self.motor_angles and 0 <= angle <= 180:
+            self.motor_angles[motor] = angle
+            print(f"{motor} updated to {angle} degrees.")
+            return True
+        else:
+            print(f"Invalid angle {angle} for motor {motor}. Must be between 0 and 180.")
+            return False
+
+    def encode_motor_angles(self):
+        """
+        Transform the motor angles dictionary into a comma-separated string format.
+        
+        :return: str: A string in the format 'angle1,angle2,angle3,angle4'
+        """
+        return ','.join(str(self.motor_angles[motor]) for motor in ['m0', 'm1', 'm2', 'm3'])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Main 
 
@@ -407,4 +438,24 @@ vector = [1, 1, 1]
 me.apply_homogeneous_transform(m_combined, vector)
 
 transformed_vector = me.apply_homogeneous_transform(m_combined, vector)
-print(transformed_vector)
+# print(transformed_vector)
+
+# Example usage of the SerialHandle class
+
+serial_handle = SerialHandle()
+serial_handle.initialize_serial()
+
+# Update motor angles
+serial_handle.update_motor_angles('m0', 90)
+serial_handle.update_motor_angles('m1', 45)
+serial_handle.update_motor_angles('m2', 110)
+serial_handle.update_motor_angles('m3', 80)
+
+# Encode angles into the Arduino-compatible string format
+encoded_string = serial_handle.encode_motor_angles()
+print(f"Encoded Motor Angles: {encoded_string}")  # Output: '90,45,180,0'
+
+# Send the encoded angles to the Arduino
+encoded_message = serial_handle.serial_encode(encoded_string + '\n')  # Adding newline character
+if encoded_message:
+    serial_handle.send_servo_positions(encoded_message)
