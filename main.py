@@ -7,12 +7,22 @@ import mediapipe as mp
 import math
 import serial
 
+import numpy as np
+import pandas as pd
+import scipy.spatial.transform.rotation as rot
 
-# Add the subfolder1 to the system path to import modules
+
+# Add communication to ---» serial message reciever
 sys.path.append(os.path.join(os.path.dirname("controlMotorsUNO/sendPWMonly"), 'endPointControl'))
 
-import cv2
-import mediapipe as mp
+
+
+
+# getting Camera frame 
+
+
+
+
 
 class CameraControl:
     def __init__(self):
@@ -40,10 +50,18 @@ class CameraControl:
             cv2.destroyAllWindows()
             print("Camera is OFF")
 
+# mediapiepe Handmark detection and processing
 
 
-import cv2
-import mediapipe as mp
+
+
+
+
+
+
+
+
+
 
 class HandProcessor:
     def __init__(self):
@@ -100,37 +118,157 @@ class HandProcessor:
         x, y = int(index_finger_tip.x * w), int(index_finger_tip.y * h)
 
         return (x, y)
+# Geometric operations
 
 
 
 
 
 
-class KineticsHandle:
+
+
+
+
+
+class XYZTransformations:
     def initialize(self):
         print("Initializing Kinetics Handle...")
 
-    def rotZ(self, angle):
-        
-        return angle
-    
-    def translate(self, dir, distance):
-        return distance
-    
-    def translateX(self, distance):
-        return self.translate("X", distance)
-    
-    def translateY(self, distance):
-        return self.translate("Y", distance)
-    
-    def closeClaw(self):
-        return True
+    def rotation_matrix_x(self,angle_degrees):
+        angle_radians = np.deg2rad(angle_degrees)
+        return np.array([[1, 0, 0, 0],
+                        [0, np.cos(angle_radians), -np.sin(angle_radians), 0],
+                        [0, np.sin(angle_radians), np.cos(angle_radians), 0],
+                        [0, 0, 0, 1]])
 
-    def forwardKinematics(self, coords):
-        x,y,z = coords
-        # Simulate forward kinematics
-        return
+    def rotation_matrix_y(self,angle_degrees):
+        angle_radians = np.deg2rad(angle_degrees)
+        return np.array([[np.cos(angle_radians), 0, np.sin(angle_radians), 0],
+                        [0, 1, 0, 0],
+                        [-np.sin(angle_radians), 0, np.cos(angle_radians), 0],
+                        [0, 0, 0, 1]])
+
+    def rotation_matrix_z(self,angle_degrees):
+        angle_radians = np.deg2rad(angle_degrees)
+        return np.array([[np.cos(angle_radians), -np.sin(angle_radians), 0, 0],
+                        [np.sin(angle_radians), np.cos(angle_radians), 0, 0],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1]])
+
+    def translation_matrix_x(self,tx):
+        return np.array([[1, 0, 0, tx],
+                        [0, 1, 0, 0],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1]])
+
+    def translation_matrix_y(self,ty):
+        return np.array([[1, 0, 0, 0],
+                        [0, 1, 0, ty],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1]])
+
+    def translation_matrix_z(self,tz):
+        return np.array([[1, 0, 0, 0],
+                        [0, 1, 0, 0],
+                        [0, 0, 1, tz],
+                        [0, 0, 0, 1]])
         
+    def identity(self):
+        return np.array([[1,0,0,0],
+                [0,1,0,0],
+                [0,0,1,0],
+                [0,0,0,1]]
+                )
+
+    def homogenous_matrix(self, operation, value):
+        id = self.identity()  # Assuming this method exists in your class
+
+        self.case = {
+            0: id @ self.rotation_matrix_x(value),
+            1: id @ self.rotation_matrix_y(value),  # Added self. to call the method
+            2: id @ self.rotation_matrix_z(value),  # Added self. to call the method
+            3: id @ self.translation_matrix_x(value),  # Added self. to call the method
+            4: id @ self.translation_matrix_y(value),  # Added self. to call the method
+            5: id @ self.translation_matrix_z(value)   # Added self. to call the method
+        }
+
+        return self.case.get(operation, "Invalid operation")  # Use self.case and operation parameter directly
+
+
+    def generateHtotal(self,operations,values):
+        htotal = self.identity()
+        for i in range(len(operations)):
+            htotal = htotal @ self.homogenous_matrix(operations[i],values[i])
+        return htotal
+
+    def apply_homogeneous_transform(self,matrix, vector):
+        # Extend the 3D vector to homogeneous coordinates by adding 1
+        extended_vector = np.array([vector[0], vector[1], vector[2], 1])
+        
+        # Apply the transformation matrix
+        transformed_vector = matrix @ extended_vector
+        
+        # Return the transformed vector (in Cartesian coordinates)
+        return transformed_vector[:3]  # We ignore the last element (homogeneous component)
+
+    def clean_matrix(self,matrix, tolerance=1e-10):
+        """
+        Replaces very small values in a matrix with zero.
+
+        Parameters:
+        matrix (np.ndarray): The input matrix to clean.
+        tolerance (float): The threshold below which values are set to zero (default: 1e-10).
+
+        Returns:
+        np.ndarray: The cleaned matrix with near-zero values set to zero.
+        """
+        cleaned_matrix = np.where(abs(matrix) < tolerance, 0, matrix)
+        return np.array(cleaned_matrix)
+
+
+    # # Example usage:
+    # matrix = np.array([[6.123234e-17, 1.000000e+00, 0.000000e+00],
+    #                    [1.000000e+00, 6.123234e-17, 0.000000e+00],
+    #                    [0.000000e+00, 0.000000e+00, 6.123234e-17]])
+
+    # cleaned_matrix = clean_matrix(matrix)
+
+
+    """ tests
+
+        
+    # Test for Pure Translation
+    m_translation = generateHtotal([3], [10])  # Translation along x-axis by 10
+    vector = [1, 2, 3]
+    transformed_vector = apply_homogeneous_transform(m_translation, vector)
+    # print("Pure Translation Test - Expected: [11, 2, 3], Got:", transformed_vector)
+
+    # Test for Pure Rotation around Z-axis
+    m_rotation_z = clean_matrix(generateHtotal([2], [90]))  # 90 degree rotation around z-axis
+    vector = [1, 0, 0]
+    transformed_vector = apply_homogeneous_transform(m_rotation_z, vector)
+    # print("Pure Rotation Test - Expected: [0, 1, 0], Got:", transformed_vector)
+
+    # Test for Combination of Translation and Rotation
+    m_combined = generateHtotal([3, 2], [5, 90])  # Translation by 5 and 90 degree rotation around z-axis
+    vector = [1, 0, 0]
+    transformed_vector = apply_homogeneous_transform(m_combined, vector)
+    # print("Combined Test - Expected: [5, 1, 0], Got:", transformed_vector)
+    """
+       
+#SERIAL COMMUNICATION
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class SerialHandle:
@@ -187,6 +325,21 @@ class SerialHandle:
         else:
             print("Serial port is not open. Please initialize the serial connection first.")
 
+# Main 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class MainSystem:
@@ -198,7 +351,7 @@ class MainSystem:
         self.move_boolean = None
 
         # Initialize handles
-        self.kinetics_handle = KineticsHandle()
+        self.transformation = XYZTransformations()
         self.camera_handle = CameraControl()
         self.serial_handle = SerialHandle()
         
@@ -223,8 +376,10 @@ if __name__ == "__main__":
     camera = CameraControl()
     hand_processor = HandProcessor()
 
+    
+
     # Turn on the camera and start processing the frames
-    if camera.turn_on():
+    if camera.turn_off():
         while True:
             frame = camera.capture_image()
             if frame is None:
@@ -242,3 +397,14 @@ if __name__ == "__main__":
 
         # Turn off the camera and clean up
         camera.turn_off()
+
+
+me = XYZTransformations()
+angle_x = 45
+
+m_combined = me.generateHtotal([3, 2], [5, 90])  # Translation by 5 and 90 degree rotation around z-axis
+vector = [1, 1, 1]
+me.apply_homogeneous_transform(m_combined, vector)
+
+transformed_vector = me.apply_homogeneous_transform(m_combined, vector)
+print(transformed_vector)
